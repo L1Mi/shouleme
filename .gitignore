@@ -7,4 +7,7 @@ build/
 .DS_Store
 *.env
 .env.local
-data/
+# data目录只上传食物数据库
+data/records.json
+data/user.json
+data/baidu_config.json
