@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { foods } from '@/data/foods'
+import { foods } from './foods'
 
 // 中英文对照表
 const foodTranslation: Record<string, string> = {
