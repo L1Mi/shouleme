@@ -342,63 +342,12 @@ export default function Home() {
 
       {/* 拍照识别按钮 */}
       <div className="px-4 py-6 flex justify-center">
-        <label className="cursor-pointer">
-          <input
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="hidden"
-            onChange={async (e) => {
-              const file = e.target.files?.[0]
-              if (!file) return
-              
-              // 显示加载中
-              const loading = confirm('正在识别食物，请稍候...')
-              if (!loading) return
-              
-              try {
-                // 将图片转为base64
-                const reader = new FileReader()
-                reader.onload = async () => {
-                  const base64 = (reader.result as string).split(',')[1]
-                  
-                  // 调用百度API识别
-                  const res = await fetch(`/api/foods/baidu?base64=${encodeURIComponent(base64)}`)
-                  const data = await res.json()
-                  
-                  if (data.needConfig) {
-                    alert('请先在设置页面配置百度API Key')
-                    return
-                  }
-                  
-                  if (data.error) {
-                    alert('识别失败: ' + data.error)
-                    return
-                  }
-                  
-                  // 获取识别的食物名称
-                  const foodName = data.result?.[0]?.name
-                  if (foodName) {
-                    // 用识别结果搜索本地数据库
-                    setSearchKeyword(foodName)
-                    searchFoods(foodName)
-                    setShowAddFood(true)
-                  } else {
-                    alert('未能识别出食物，请重试或手动搜索')
-                  }
-                }
-                reader.readAsDataURL(file)
-              } catch (error) {
-                console.error('识别失败:', error)
-                alert('识别失败，请重试')
-              }
-            }}
-          />
+        <Link href="/camera" className="cursor-pointer">
           <div className="w-20 h-20 bg-emerald-500 rounded-full flex items-center justify-center shadow-lg hover:bg-emerald-600 transition-colors">
             <Camera className="w-10 h-10 text-white" />
           </div>
           <p className="text-center text-gray-500 text-sm mt-2">拍照识别</p>
-        </label>
+        </Link>
       </div>
 
       {/* 底部导航 */}
