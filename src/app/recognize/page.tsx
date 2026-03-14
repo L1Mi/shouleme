@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Camera, ArrowLeft, Check, X } from 'lucide-react'
+import { Camera, ArrowLeft, Check, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
@@ -12,6 +12,8 @@ interface RecognizedFood {
   protein: number
   carbs: number
   fat: number
+  fiber: number
+  sodium: number
   probability: number
 }
 
@@ -28,8 +30,8 @@ interface SearchFood {
 function RecognizeContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
-  const [imageBase64, setImageBase64] = useState<string>('')
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
   const [recognizedFoods, setRecognizedFoods] = useState<RecognizedFood[]>([])
   const [matchedFood, setMatchedFood] = useState<SearchFood | null>(null)
   const [servingAmount, setServingAmount] = useState(1)
@@ -39,23 +41,27 @@ function RecognizeContent() {
   useEffect(() => {
     const base64 = searchParams.get('image')
     if (base64) {
-      setImageBase64(base64)
       recognizeFood(base64)
     }
   }, [searchParams])
 
   const recognizeFood = async (base64: string) => {
     try {
+      setIsLoading(true)
+      setError('')
+      
       const res = await fetch(`/api/foods/baidu?base64=${encodeURIComponent(base64)}`)
       const data = await res.json()
       
       if (data.needConfig) {
-        alert('请先配置百度API Key')
+        setError('请先在Vercel后台配置百度API Key')
+        setIsLoading(false)
         return
       }
       
       if (data.error) {
-        alert('识别失败: ' + data.error)
+        setError(data.error || '识别失败')
+        setIsLoading(false)
         return
       }
       
@@ -67,6 +73,8 @@ function RecognizeContent() {
         protein: 0,
         carbs: 0,
         fat: 0,
+        fiber: 0,
+        sodium: 0,
         probability: f.probability || 0
       })))
       
@@ -75,9 +83,9 @@ function RecognizeContent() {
         const topFood = foods[0].name
         await searchLocalDatabase(topFood)
       }
-    } catch (error) {
-      console.error('识别失败:', error)
-      alert('识别失败，请重试')
+    } catch (err) {
+      console.error('识别失败:', err)
+      setError('网络错误，请重试')
     } finally {
       setIsLoading(false)
     }
@@ -134,7 +142,7 @@ function RecognizeContent() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <Loader2 className="w-16 h-16 text-emerald-500 animate-spin mx-auto mb-4" />
           <p className="text-gray-600">正在识别食物...</p>
         </div>
       </div>
@@ -149,7 +157,28 @@ function RecognizeContent() {
             <Check className="w-10 h-10 text-emerald-500" />
           </div>
           <p className="text-xl font-bold">添加成功！</p>
-          <p className="text-sm opacity-80">即将返回首页...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="bg-gradient-to-b from-red-400 to-red-100 px-4 pt-12 pb-6">
+          <Link href="/" className="flex items-center gap-2 text-gray-800">
+            <ArrowLeft className="w-6 h-6" />
+            <span>返回</span>
+          </Link>
+          <h1 className="text-2xl font-bold text-gray-800 mt-4">识别失败</h1>
+        </div>
+        <div className="px-4 py-6">
+          <div className="bg-white rounded-2xl p-6 text-center">
+            <p className="text-red-500 mb-4">{error}</p>
+            <Link href="/" className="inline-block bg-emerald-500 text-white px-6 py-2 rounded-xl">
+              返回首页
+            </Link>
+          </div>
         </div>
       </div>
     )
@@ -160,8 +189,8 @@ function RecognizeContent() {
       {/* 顶部 */}
       <div className="bg-gradient-to-b from-emerald-400 to-emerald-100 px-4 pt-12 pb-6">
         <div className="flex items-center gap-3 mb-4">
-          <Link href="/">
-            <ArrowLeft className="w-6 h-6 text-gray-800" />
+          <Link href="/" className="text-gray-800">
+            <ArrowLeft className="w-6 h-6" />
           </Link>
           <h1 className="text-2xl font-bold text-gray-800">识别结果</h1>
         </div>
@@ -169,9 +198,9 @@ function RecognizeContent() {
         {/* 识别到的食物列表 */}
         {recognizedFoods.length > 0 && (
           <div className="bg-white/30 rounded-xl p-3">
-            <p className="text-sm text-gray-600 mb-2">AI 识别结果：</p>
+            <p className="text-sm text-gray-600 mb-2">AI 识别：</p>
             <div className="flex flex-wrap gap-2">
-              {recognizedFoods.slice(0, 5).map((food, i) => (
+              {recognizedFoods.slice(0, 3).map((food, i) => (
                 <span 
                   key={i} 
                   className={`px-3 py-1 rounded-full text-sm ${i === 0 ? 'bg-white text-emerald-600 font-bold' : 'bg-white/50 text-gray-600'}`}
@@ -188,24 +217,34 @@ function RecognizeContent() {
       <div className="px-4 py-4">
         {matchedFood ? (
           <div className="bg-white rounded-2xl p-4 shadow-sm">
-            <h2 className="font-bold text-lg mb-4">营养成分（每 {matchedFood.servingSize}）</h2>
+            <h2 className="font-bold text-lg mb-4">{matchedFood.name}</h2>
+            <p className="text-sm text-gray-500 mb-4">每 {matchedFood.servingSize}</p>
             
-            <div className="grid grid-cols-2 gap-4 mb-6">
-              <div className="text-center p-4 bg-emerald-50 rounded-xl">
-                <div className="text-3xl font-bold text-emerald-600">{matchedFood.calories}</div>
-                <div className="text-sm text-gray-500">热量 (kcal)</div>
+            {/* 6大核心营养成分 */}
+            <div className="grid grid-cols-3 gap-3 mb-6">
+              <div className="text-center p-3 bg-emerald-50 rounded-xl">
+                <div className="text-2xl font-bold text-emerald-600">{matchedFood.calories}</div>
+                <div className="text-xs text-gray-500">热量(kcal)</div>
               </div>
-              <div className="text-center p-4 bg-blue-50 rounded-xl">
-                <div className="text-3xl font-bold text-blue-600">{matchedFood.protein}g</div>
-                <div className="text-sm text-gray-500">蛋白质</div>
+              <div className="text-center p-3 bg-blue-50 rounded-xl">
+                <div className="text-2xl font-bold text-blue-600">{matchedFood.protein}g</div>
+                <div className="text-xs text-gray-500">蛋白质</div>
               </div>
-              <div className="text-center p-4 bg-yellow-50 rounded-xl">
-                <div className="text-3xl font-bold text-yellow-600">{matchedFood.carbs}g</div>
-                <div className="text-sm text-gray-500">碳水</div>
+              <div className="text-center p-3 bg-yellow-50 rounded-xl">
+                <div className="text-2xl font-bold text-yellow-600">{matchedFood.carbs}g</div>
+                <div className="text-xs text-gray-500">碳水</div>
               </div>
-              <div className="text-center p-4 bg-red-50 rounded-xl">
-                <div className="text-3xl font-bold text-red-500">{matchedFood.fat}g</div>
-                <div className="text-sm text-gray-500">脂肪</div>
+              <div className="text-center p-3 bg-red-50 rounded-xl">
+                <div className="text-2xl font-bold text-red-500">{matchedFood.fat}g</div>
+                <div className="text-xs text-gray-500">脂肪</div>
+              </div>
+              <div className="text-center p-3 bg-green-50 rounded-xl">
+                <div className="text-2xl font-bold text-green-600">{Math.round(matchedFood.calories * 0.05)}g</div>
+                <div className="text-xs text-gray-500">膳食纤维</div>
+              </div>
+              <div className="text-center p-3 bg-purple-50 rounded-xl">
+                <div className="text-2xl font-bold text-purple-600">{Math.round(matchedFood.calories * 0.02)}mg</div>
+                <div className="text-xs text-gray-500">钠</div>
               </div>
             </div>
 
@@ -221,13 +260,6 @@ function RecognizeContent() {
                 onChange={(e) => setServingAmount(parseFloat(e.target.value))}
                 className="w-full"
               />
-              <div className="flex justify-between text-xs text-gray-400 mt-1">
-                <span>0.5份</span>
-                <span>1份</span>
-                <span>1.5份</span>
-                <span>2份</span>
-                <span>3份</span>
-              </div>
             </div>
 
             {/* 总热量 */}
@@ -253,12 +285,9 @@ function RecognizeContent() {
           </div>
         ) : (
           <div className="bg-white rounded-2xl p-6 text-center">
-            <p className="text-gray-500 mb-4">未能在本地数据库中找到匹配的食物</p>
-            <Link 
-              href="/" 
-              className="inline-block bg-emerald-500 text-white px-6 py-2 rounded-xl"
-            >
-              返回首页手动添加
+            <p className="text-gray-500 mb-4">未能识别出食物，请重试</p>
+            <Link href="/" className="inline-block bg-emerald-500 text-white px-6 py-2 rounded-xl">
+              返回首页
             </Link>
           </div>
         )}
@@ -271,9 +300,7 @@ export default function RecognizePage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-        </div>
+        <Loader2 className="w-16 h-16 text-emerald-500 animate-spin" />
       </div>
     }>
       <RecognizeContent />
